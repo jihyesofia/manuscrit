@@ -9,7 +9,7 @@ import {
 
 /* ═══════════════════ Constants ═══════════════════ */
 
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "350404763677-306fu0u0qksg4vqa42p77igl3f2t0m22.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const DRIVE_FILE_NAME = "manuscrit_project_data.json";
 const AUTOSAVE_DELAY = 3000;
