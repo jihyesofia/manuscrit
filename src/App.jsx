@@ -4,12 +4,13 @@ import {
   Cloud, CloudOff, BookOpen, StickyNote, Menu, X,
   Loader2, LogOut, FolderPlus, FilePlus, MoreVertical,
   Download, FileDown, Square, CheckSquare, GripVertical,
-  Search
+  Search, Bold, Italic, Underline, Type, ALargeSmall,
+  ChevronUp, Minus
 } from "lucide-react";
 
 /* ═══════════════════ Constants ═══════════════════ */
 
-const GOOGLE_CLIENT_ID = "350404763677-306fu0u0qksg4vqa42p77igl3f2t0m22.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const DRIVE_FILE_NAME = "manuscrit_project_data.json";
 const AUTOSAVE_DELAY = 3000;
@@ -310,7 +311,28 @@ export default function Manuscrit() {
   const [exportSelected, setExportSelected] = useState(new Set());
   const [dragItem, setDragItem] = useState(null);
   const [dropIndicator, setDropIndicator] = useState(null);
+  const [formatBarOpen, setFormatBarOpen] = useState(false);
+  const [editorStyle, setEditorStyle] = useState({ fontSize: 0.95, lineHeight: 2.05, bold: false, italic: false, underline: false });
   const editorRef = useRef(null);
+
+  const FONT_SIZES = [0.8, 0.85, 0.9, 0.95, 1.0, 1.1, 1.2];
+  const LINE_HEIGHTS = [1.5, 1.7, 1.85, 2.05, 2.2, 2.4];
+
+  const cycleFontSize = useCallback((dir) => {
+    setEditorStyle(prev => {
+      const idx = FONT_SIZES.indexOf(prev.fontSize);
+      const next = idx === -1 ? 3 : Math.max(0, Math.min(FONT_SIZES.length - 1, idx + dir));
+      return { ...prev, fontSize: FONT_SIZES[next] };
+    });
+  }, []);
+
+  const cycleLineHeight = useCallback((dir) => {
+    setEditorStyle(prev => {
+      const idx = LINE_HEIGHTS.indexOf(prev.lineHeight);
+      const next = idx === -1 ? 3 : Math.max(0, Math.min(LINE_HEIGHTS.length - 1, idx + dir));
+      return { ...prev, lineHeight: LINE_HEIGHTS[next] };
+    });
+  }, []);
 
   // ── Derived ──
   const activeDoc = useMemo(() => {
@@ -596,9 +618,11 @@ export default function Manuscrit() {
         :root { --bg-base:#faf9f7;--surface:#fff;--surface-elevated:#fff;--surface-recessed:#f5f4f1;--border-subtle:#e8e6e1;--text-primary:#2c2a26;--text-secondary:#6b6860;--text-muted:#9e9a91;--accent:#7c6f5b;--accent-warm:#b8926a;--hover-bg:rgba(124,111,91,.07);--active-bg:rgba(124,111,91,.12);--input-bg:#f5f4f1;--editor-bg:#fffffe;--scrollbar-thumb:#d4d0c8; }
         @media(prefers-color-scheme:dark){ :root { --bg-base:#1a1916;--surface:#222019;--surface-elevated:#2a2822;--surface-recessed:#15140f;--border-subtle:#3a3830;--text-primary:#e8e4dc;--text-secondary:#a09b8f;--text-muted:#6e695e;--accent:#b8a88a;--accent-warm:#c9a77c;--hover-bg:rgba(184,168,138,.08);--active-bg:rgba(184,168,138,.14);--input-bg:#2a2822;--editor-bg:#1e1d18;--scrollbar-thumb:#4a4740; } }
         *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100%;overflow:hidden}
+        html{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
         ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
         textarea::placeholder{color:var(--text-muted);opacity:.7}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} .animate-fade-in{animation:fadeIn .3s ease-out}
+        @keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:60px}} .animate-slide-down{animation:slideDown .2s ease-out}
       `}</style>
 
       <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-base)", fontFamily: "'Nanum Gothic', sans-serif" }}>
@@ -608,13 +632,14 @@ export default function Manuscrit() {
         ) : (
           <>
             {leftOpen && <div className="fixed inset-0 z-40" style={{ background: "rgba(0,0,0,.3)" }} onClick={() => setLeftOpen(false)} />}
-            <div className="fixed inset-y-0 left-0 z-50" style={{ width: 280, background: "var(--surface)", transform: leftOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 300ms cubic-bezier(.4,0,.2,1)", boxShadow: leftOpen ? "4px 0 24px rgba(0,0,0,.12)" : "none" }}>{sidebarContent}</div>
+            <div className="fixed inset-y-0 left-0 z-50" style={{ width: 280, background: "var(--surface)", transform: leftOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 300ms cubic-bezier(.4,0,.2,1)", boxShadow: leftOpen ? "4px 0 24px rgba(0,0,0,.12)" : "none", paddingTop: "env(safe-area-inset-top)" }}>{sidebarContent}</div>
           </>
         )}
 
         {/* Center */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ background: "var(--editor-bg)" }}>
-          <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 48 }}>
+          {/* Top Bar — with safe-area padding on mobile */}
+          <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 48, paddingTop: "max(0.625rem, env(safe-area-inset-top))", paddingBottom: "0.625rem" }}>
             <div className="flex items-center gap-2 min-w-0">
               {!isDesktop && <button onClick={() => setLeftOpen(true)} className="p-1.5 rounded-md flex-shrink-0" style={{ color: "var(--text-muted)" }}><Menu size={18} /></button>}
               <div className="min-w-0">
@@ -628,15 +653,65 @@ export default function Manuscrit() {
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {driveStatus === "connected" && syncMessage && <span className="text-xs mr-2 animate-fade-in" style={{ color: "var(--accent)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.6rem" }}>{syncMessage}</span>}
+              {activeDoc && (
+                <button onClick={() => setFormatBarOpen(!formatBarOpen)} className="p-1.5 rounded-md" style={{ color: formatBarOpen ? "var(--accent)" : "var(--text-muted)" }}>
+                  <Type size={16} />
+                </button>
+              )}
               {!isDesktop && <button onClick={() => setRightOpen(true)} className="p-1.5 rounded-md" style={{ color: "var(--text-muted)" }}><StickyNote size={18} /></button>}
             </div>
           </div>
+
+          {/* Formatting Toolbar — toggled */}
+          {formatBarOpen && activeDoc && (
+            <div className="flex items-center gap-1 px-4 py-1.5 flex-shrink-0 animate-slide-down overflow-x-auto" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-recessed)" }}>
+              {/* Bold */}
+              <button onClick={() => setEditorStyle(p => ({ ...p, bold: !p.bold }))}
+                className="p-1.5 rounded-md" style={{ color: editorStyle.bold ? "var(--accent)" : "var(--text-muted)", background: editorStyle.bold ? "var(--active-bg)" : "transparent" }}>
+                <Bold size={14} />
+              </button>
+              {/* Italic */}
+              <button onClick={() => setEditorStyle(p => ({ ...p, italic: !p.italic }))}
+                className="p-1.5 rounded-md" style={{ color: editorStyle.italic ? "var(--accent)" : "var(--text-muted)", background: editorStyle.italic ? "var(--active-bg)" : "transparent" }}>
+                <Italic size={14} />
+              </button>
+              {/* Underline */}
+              <button onClick={() => setEditorStyle(p => ({ ...p, underline: !p.underline }))}
+                className="p-1.5 rounded-md" style={{ color: editorStyle.underline ? "var(--accent)" : "var(--text-muted)", background: editorStyle.underline ? "var(--active-bg)" : "transparent" }}>
+                <Underline size={14} />
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "var(--border-subtle)", margin: "0 4px" }} />
+
+              {/* Font size */}
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => cycleFontSize(-1)} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><Minus size={12} /></button>
+                <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.6rem", color: "var(--text-secondary)", minWidth: 32, textAlign: "center", fontWeight: 500 }}>{Math.round(editorStyle.fontSize * 100)}%</span>
+                <button onClick={() => cycleFontSize(1)} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><ALargeSmall size={12} /></button>
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "var(--border-subtle)", margin: "0 4px" }} />
+
+              {/* Line height */}
+              <div className="flex items-center gap-0.5">
+                <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.5rem", color: "var(--text-muted)", marginRight: 2 }}>행간</span>
+                <button onClick={() => cycleLineHeight(-1)} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><Minus size={12} /></button>
+                <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.6rem", color: "var(--text-secondary)", minWidth: 28, textAlign: "center", fontWeight: 500 }}>{editorStyle.lineHeight.toFixed(1)}</span>
+                <button onClick={() => cycleLineHeight(1)} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><ChevronUp size={12} /></button>
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
             {activeDoc ? (
               <div className="max-w-3xl mx-auto px-6 py-8 md:px-12 md:py-12 animate-fade-in">
                 <textarea ref={editorRef} value={activeDoc.content} onChange={(e) => updateDoc(activeDocId, "content", e.target.value)} placeholder="여기에 글을 쓰세요..."
-                  className="w-full resize-none outline-none" style={{ background: "transparent", color: "var(--text-primary)", fontFamily: "'Nanum Gothic', sans-serif", fontSize: "0.95rem", lineHeight: 2.05, letterSpacing: "-0.01em", minHeight: "calc(100vh - 200px)" }} />
+                  className="w-full resize-none outline-none" style={{
+                    background: "transparent", color: "var(--text-primary)", fontFamily: "'Nanum Gothic', sans-serif",
+                    fontSize: `${editorStyle.fontSize}rem`, lineHeight: editorStyle.lineHeight, letterSpacing: "-0.01em",
+                    fontWeight: editorStyle.bold ? 700 : 400, fontStyle: editorStyle.italic ? "italic" : "normal",
+                    textDecoration: editorStyle.underline ? "underline" : "none", minHeight: "calc(100vh - 200px)"
+                  }} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-4 px-8">
