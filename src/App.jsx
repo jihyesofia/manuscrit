@@ -10,7 +10,7 @@ import {
 
 /* ═══════════════════ Constants ═══════════════════ */
 
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "350404763677-306fu0u0qksg4vqa42p77igl3f2t0m22.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const DRIVE_FILE_NAME = "manuscrit_project_data.json";
 const AUTOSAVE_DELAY = 3000;
@@ -525,7 +525,7 @@ export default function Manuscrit() {
   const sidebarContent = (
     <div className="flex flex-col h-full" style={{ fontFamily: "'Nanum Gothic', sans-serif" }}>
       <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border-subtle)" }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveDocId(null); if (!isDesktop) setLeftOpen(false); }}>
           <BookOpen size={16} style={{ color: "var(--accent)" }} />
           <span style={{ color: "var(--text-primary)", fontFamily: "'Montserrat', sans-serif", fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.08em" }}>MANUSCRIT</span>
         </div>
@@ -598,9 +598,9 @@ export default function Manuscrit() {
   /* ─────── Memo ─────── */
   const memoContent = (
     <div className="flex flex-col h-full" style={{ fontFamily: "'Nanum Gothic', sans-serif" }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border-subtle)" }}>
+      <div className="flex items-center justify-between px-4 border-b" style={{ borderColor: "var(--border-subtle)", paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.75rem" }}>
         <div className="flex items-center gap-2"><StickyNote size={14} style={{ color: "var(--accent-warm)" }} /><span style={{ color: "var(--text-primary)", fontFamily: "'Montserrat', sans-serif", fontWeight: 600, fontSize: "0.75rem", letterSpacing: "0.06em" }}>MEMO</span></div>
-        {!isDesktop && <button onClick={() => setRightOpen(false)} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><X size={18} /></button>}
+        {!isDesktop && <button onClick={() => setRightOpen(false)} className="p-2 rounded-md" style={{ color: "var(--text-muted)" }}><X size={20} /></button>}
       </div>
       <div className="flex-1 p-4">
         {activeDoc ? (
@@ -618,7 +618,6 @@ export default function Manuscrit() {
         :root { --bg-base:#faf9f7;--surface:#fff;--surface-elevated:#fff;--surface-recessed:#f5f4f1;--border-subtle:#e8e6e1;--text-primary:#2c2a26;--text-secondary:#6b6860;--text-muted:#9e9a91;--accent:#7c6f5b;--accent-warm:#b8926a;--hover-bg:rgba(124,111,91,.07);--active-bg:rgba(124,111,91,.12);--input-bg:#f5f4f1;--editor-bg:#fffffe;--scrollbar-thumb:#d4d0c8; }
         @media(prefers-color-scheme:dark){ :root { --bg-base:#1a1916;--surface:#222019;--surface-elevated:#2a2822;--surface-recessed:#15140f;--border-subtle:#3a3830;--text-primary:#e8e4dc;--text-secondary:#a09b8f;--text-muted:#6e695e;--accent:#b8a88a;--accent-warm:#c9a77c;--hover-bg:rgba(184,168,138,.08);--active-bg:rgba(184,168,138,.14);--input-bg:#2a2822;--editor-bg:#1e1d18;--scrollbar-thumb:#4a4740; } }
         *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100%;overflow:hidden}
-        html{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
         ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
         textarea::placeholder{color:var(--text-muted);opacity:.7}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} .animate-fade-in{animation:fadeIn .3s ease-out}
@@ -639,17 +638,17 @@ export default function Manuscrit() {
         {/* Center */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ background: "var(--editor-bg)" }}>
           {/* Top Bar — with safe-area padding on mobile */}
-          <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 48, paddingTop: "max(0.625rem, env(safe-area-inset-top))", paddingBottom: "0.625rem" }}>
-            <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 48, paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.5rem" }}>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               {!isDesktop && <button onClick={() => setLeftOpen(true)} className="p-1.5 rounded-md flex-shrink-0" style={{ color: "var(--text-muted)" }}><Menu size={18} /></button>}
-              <div className="min-w-0">
+              <button className="min-w-0 flex-1 text-left" onClick={() => { setActiveDocId(null); setFormatBarOpen(false); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 {activeDoc ? (
                   <div className="animate-fade-in">
                     <p className="text-xs truncate" style={{ color: "var(--text-muted)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.6rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>{activeDoc.projectTitle}</p>
                     <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)", marginTop: 1 }}>{activeDoc.title}</p>
                   </div>
                 ) : <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'Montserrat', sans-serif" }}>Manuscrit</p>}
-              </div>
+              </button>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {driveStatus === "connected" && syncMessage && <span className="text-xs mr-2 animate-fade-in" style={{ color: "var(--accent)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.6rem" }}>{syncMessage}</span>}
