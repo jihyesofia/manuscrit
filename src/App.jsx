@@ -5,7 +5,7 @@ import {
   Loader2, LogOut, FolderPlus, FilePlus, MoreVertical,
   Download, FileDown, Square, CheckSquare, GripVertical,
   Search, Bold, Italic, Underline, Type, ALargeSmall,
-  ChevronUp, Minus
+  ChevronUp, Minus, RefreshCw, Save
 } from "lucide-react";
 
 /* ═══════════════════ Constants ═══════════════════ */
@@ -183,7 +183,7 @@ function ProjectItem({ project, index, activeDocId, editingTitleId, editingTitle
             style={{ background: "var(--input-bg)", color: "var(--text-primary)", border: "1px solid var(--border-subtle)", fontFamily: "'Nanum Gothic', sans-serif" }}
             onClick={(e) => e.stopPropagation()} />
         ) : (
-          <span className="flex-1 text-xs font-bold truncate select-none" style={{ color: "var(--text-primary)" }} {...lp}>{project.title}</span>
+          <span className="flex-1 text-xs font-bold truncate select-none" style={{ color: "var(--text-primary)" }} {...lp} onDoubleClick={() => onStartRename(project.id, project.title)}>{project.title}</span>
         )}
         <div className="relative flex-shrink-0">
           <button className="opacity-0 group-hover:opacity-100 p-0.5 rounded" style={{ color: "var(--text-muted)", transition: "opacity 150ms" }}
@@ -260,7 +260,7 @@ function DocItem({ child, projectId, index, activeDocId, editingTitleId, editing
         ) : (
           <span className="flex-1 text-xs truncate select-none"
             style={{ color: activeDocId === child.id ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: activeDocId === child.id ? 700 : 400 }}
-            {...lp}>{child.title}</span>
+            {...lp} onDoubleClick={() => onStartRename(child.id, child.title)}>{child.title}</span>
         )}
         {/* Status dot — click to cycle */}
         {child.type === "chapter" && (
@@ -311,9 +311,91 @@ export default function Manuscrit() {
   const [exportSelected, setExportSelected] = useState(new Set());
   const [dragItem, setDragItem] = useState(null);
   const [dropIndicator, setDropIndicator] = useState(null);
-  const [formatBarOpen, setFormatBarOpen] = useState(false);
+  const [formatBarOpen, setFormatBarOpen] = useState(true);
   const [editorStyle, setEditorStyle] = useState({ fontSize: 0.95, lineHeight: 2.05, bold: false, italic: false, underline: false });
   const editorRef = useRef(null);
+  const editorScrollRef = useRef(null);
+
+  // ── Resizable Panels (Desktop) ──
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [memoWidth, setMemoWidth] = useState(280);
+  const [resizing, setResizing] = useState(null);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e) => {
+      if (resizing === "sidebar") setSidebarWidth(Math.max(180, Math.min(420, e.clientX)));
+      else if (resizing === "memo") setMemoWidth(Math.max(180, Math.min(420, window.innerWidth - e.clientX)));
+    };
+    const onUp = () => setResizing(null);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); document.body.style.cursor = ""; document.body.style.userSelect = ""; };
+  }, [resizing]);
+
+  // ── Pull-to-Refresh (Mobile) ──
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const touchStartY = useRef(0);
+  const PULL_THRESHOLD = 80;
+
+  const onTouchStartPull = useCallback((e) => {
+    const el = editorScrollRef.current;
+    if (el && el.scrollTop === 0) touchStartY.current = e.touches[0].clientY;
+    else touchStartY.current = 0;
+  }, []);
+
+  const onTouchMovePull = useCallback((e) => {
+    if (!touchStartY.current) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (dy > 0) setPullDistance(Math.min(dy * 0.5, 120));
+  }, []);
+
+  const onTouchEndPull = useCallback(async () => {
+    if (pullDistance >= PULL_THRESHOLD && driveStatus === "connected" && driveApi.accessToken) {
+      setIsRefreshing(true);
+      try {
+        const f = await driveApi.findFile();
+        if (f) { const d = await driveApi.readFile(f.id); if (Array.isArray(d) && d.length) { setProjects(d); setSyncMessage("새로고침 완료"); } }
+      } catch { setSyncMessage("새로고침 실패"); }
+      setIsRefreshing(false);
+      setTimeout(() => setSyncMessage(""), 2000);
+    }
+    setPullDistance(0);
+    touchStartY.current = 0;
+  }, [pullDistance, driveStatus]);
+
+  // ── Smart Typography ──
+  const handleEditorChange = useCallback((e) => {
+    const ta = e.target;
+    let val = ta.value;
+    let cur = ta.selectionStart;
+
+    // ... → …
+    if (cur >= 3 && val.slice(cur - 3, cur) === "...") {
+      val = val.slice(0, cur - 3) + "\u2026" + val.slice(cur);
+      cur -= 2;
+    }
+
+    // Smart double quotes: " → " or "
+    if (cur >= 1 && val[cur - 1] === '"') {
+      const before = cur >= 2 ? val[cur - 2] : "";
+      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(" || before === "\u2014";
+      val = val.slice(0, cur - 1) + (isOpen ? "\u201C" : "\u201D") + val.slice(cur);
+    }
+
+    // Smart single quotes: ' → ' or '
+    if (cur >= 1 && val[cur - 1] === "'") {
+      const before = cur >= 2 ? val[cur - 2] : "";
+      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(";
+      val = val.slice(0, cur - 1) + (isOpen ? "\u2018" : "\u2019") + val.slice(cur);
+    }
+
+    updateDoc(activeDocId, "content", val);
+    requestAnimationFrame(() => { if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; } });
+  }, [activeDocId, updateDoc]);
 
   const FONT_SIZES = [0.8, 0.85, 0.9, 0.95, 1.0, 1.1, 1.2];
   const LINE_HEIGHTS = [1.5, 1.7, 1.85, 2.05, 2.2, 2.4];
@@ -483,6 +565,35 @@ export default function Manuscrit() {
 
   const disconnectDrive = useCallback(() => { driveApi.accessToken = null; setDriveStatus("disconnected"); setDriveFileId(null); setSyncMessage(""); }, []);
 
+  // ── Manual Save & Refresh ──
+  const forceSave = useCallback(async () => {
+    if (driveStatus !== "connected" || !driveApi.accessToken) return;
+    setSyncMessage("저장 중...");
+    try {
+      const res = await driveApi.saveFile(projects, driveFileId);
+      if (res.id && !driveFileId) setDriveFileId(res.id);
+      setSyncMessage("저장 완료"); setTimeout(() => setSyncMessage(""), 2000);
+    } catch { setSyncMessage("저장 실패"); }
+  }, [projects, driveStatus, driveFileId]);
+
+  const forceRefresh = useCallback(async () => {
+    if (driveStatus !== "connected" || !driveApi.accessToken) return;
+    setSyncMessage("불러오는 중...");
+    try {
+      const f = await driveApi.findFile();
+      if (f) { const d = await driveApi.readFile(f.id); if (Array.isArray(d) && d.length) { setProjects(d); setDriveFileId(f.id); setSyncMessage("새로고침 완료"); } }
+      else setSyncMessage("저장된 데이터 없음");
+      setTimeout(() => setSyncMessage(""), 2000);
+    } catch { setSyncMessage("새로고침 실패"); }
+  }, [driveStatus]);
+
+  // Save before closing
+  useEffect(() => {
+    const handler = () => { if (driveStatus === "connected" && driveApi.accessToken) { navigator.sendBeacon?.("about:blank"); driveApi.saveFile(projects, driveFileId); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [projects, driveStatus, driveFileId]);
+
   // ── Export ──
   const openExportModal = useCallback(() => { setExportSelected(new Set()); setExportOpen(true); }, []);
   const toggleExportItem = useCallback((id) => setExportSelected(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
@@ -579,9 +690,15 @@ export default function Manuscrit() {
       </div>
       <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface-recessed)" }}>
         {driveStatus === "connected" ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2"><Cloud size={13} style={{ color: "#4ade80" }} /><span className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.65rem" }}>{syncMessage || "Google Drive 연결됨"}</span></div>
-            <button onClick={disconnectDrive} className="p-1 rounded" style={{ color: "var(--text-muted)" }}><LogOut size={12} /></button>
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><Cloud size={13} style={{ color: "#4ade80" }} /><span className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.65rem" }}>{syncMessage || "연결됨"}</span></div>
+              <div className="flex items-center gap-0.5">
+                <button onClick={forceSave} className="p-1 rounded" style={{ color: "var(--text-muted)" }} title="수동 저장"><Save size={12} /></button>
+                <button onClick={forceRefresh} className="p-1 rounded" style={{ color: "var(--text-muted)" }} title="새로고침"><RefreshCw size={12} /></button>
+                <button onClick={disconnectDrive} className="p-1 rounded" style={{ color: "var(--text-muted)" }} title="연결 해제"><LogOut size={12} /></button>
+              </div>
+            </div>
           </div>
         ) : driveStatus === "connecting" ? (
           <div className="flex items-center gap-2"><Loader2 size={13} className="animate-spin" style={{ color: "var(--accent)" }} /><span className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, fontSize: "0.65rem" }}>연결 중...</span></div>
@@ -627,7 +744,12 @@ export default function Manuscrit() {
       <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-base)", fontFamily: "'Nanum Gothic', sans-serif" }}>
         {/* Left */}
         {isDesktop ? (
-          <div style={{ width: 260, minWidth: 260, background: "var(--surface)", borderRight: "1px solid var(--border-subtle)" }}>{sidebarContent}</div>
+          <>
+            <div style={{ width: sidebarWidth, minWidth: 180, background: "var(--surface)", borderRight: "1px solid var(--border-subtle)", flexShrink: 0 }}>{sidebarContent}</div>
+            <div onMouseDown={() => setResizing("sidebar")} style={{ width: 4, cursor: "col-resize", background: "transparent", flexShrink: 0, position: "relative", zIndex: 10 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "var(--accent)"}
+              onMouseLeave={(e) => { if (!resizing) e.currentTarget.style.background = "transparent"; }} />
+          </>
         ) : (
           <>
             {leftOpen && <div className="fixed inset-0 z-40" style={{ background: "rgba(0,0,0,.3)" }} onClick={() => setLeftOpen(false)} />}
@@ -701,10 +823,22 @@ export default function Manuscrit() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+          <div ref={editorScrollRef} className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}
+            onTouchStart={onTouchStartPull} onTouchMove={onTouchMovePull} onTouchEnd={onTouchEndPull}>
+            {/* Pull-to-refresh indicator */}
+            {pullDistance > 0 && (
+              <div className="flex items-center justify-center" style={{ height: pullDistance, transition: pullDistance === 0 ? "height 200ms" : "none" }}>
+                <RefreshCw size={16} style={{ color: "var(--text-muted)", opacity: Math.min(pullDistance / PULL_THRESHOLD, 1), transform: `rotate(${pullDistance * 3}deg)` }} />
+              </div>
+            )}
+            {isRefreshing && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+              </div>
+            )}
             {activeDoc ? (
               <div className="max-w-3xl mx-auto px-6 py-8 md:px-12 md:py-12 animate-fade-in">
-                <textarea ref={editorRef} value={activeDoc.content} onChange={(e) => updateDoc(activeDocId, "content", e.target.value)} placeholder="여기에 글을 쓰세요..."
+                <textarea ref={editorRef} value={activeDoc.content} onChange={handleEditorChange} placeholder="여기에 글을 쓰세요..."
                   className="w-full resize-none outline-none" style={{
                     background: "transparent", color: "var(--text-primary)", fontFamily: "'Nanum Gothic', sans-serif",
                     fontSize: `${editorStyle.fontSize}rem`, lineHeight: editorStyle.lineHeight, letterSpacing: "-0.01em",
@@ -738,7 +872,12 @@ export default function Manuscrit() {
 
         {/* Right */}
         {isDesktop ? (
-          <div style={{ width: 280, minWidth: 280, background: "var(--surface)", borderLeft: "1px solid var(--border-subtle)" }}>{memoContent}</div>
+          <>
+            <div onMouseDown={() => setResizing("memo")} style={{ width: 4, cursor: "col-resize", background: "transparent", flexShrink: 0, position: "relative", zIndex: 10 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "var(--accent)"}
+              onMouseLeave={(e) => { if (!resizing) e.currentTarget.style.background = "transparent"; }} />
+            <div style={{ width: memoWidth, minWidth: 180, background: "var(--surface)", borderLeft: "1px solid var(--border-subtle)", flexShrink: 0 }}>{memoContent}</div>
+          </>
         ) : (
           <>
             {rightOpen && <div className="fixed inset-0 z-40" style={{ background: "rgba(0,0,0,.3)" }} onClick={() => setRightOpen(false)} />}
