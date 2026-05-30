@@ -57,6 +57,8 @@ const defaultProjects = [
 
 /* ═══════════════════ Google Drive API ═══════════════════ */
 
+const LS_TOKEN_KEY = "manuscrit_drive_token";
+
 const driveApi = {
   tokenClient: null, accessToken: null,
   async init() {
@@ -68,12 +70,36 @@ const driveApi = {
       } catch { resolve(false); }
     });
   },
-  requestToken() {
+  requestToken(usePrompt = "") {
     return new Promise((resolve, reject) => {
       if (!this.tokenClient) { reject(new Error("Not initialized")); return; }
-      this.tokenClient.callback = (r) => { if (r.error) reject(r); else { this.accessToken = r.access_token; resolve(r.access_token); } };
-      this.tokenClient.requestAccessToken({ prompt: "consent" });
+      this.tokenClient.callback = (r) => {
+        if (r.error) reject(r);
+        else {
+          this.accessToken = r.access_token;
+          try { localStorage.setItem(LS_TOKEN_KEY, JSON.stringify({ token: r.access_token, time: Date.now() })); } catch {}
+          resolve(r.access_token);
+        }
+      };
+      this.tokenClient.requestAccessToken({ prompt: usePrompt });
     });
+  },
+  restoreToken() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_TOKEN_KEY));
+      if (saved?.token && Date.now() - saved.time < 3500000) { this.accessToken = saved.token; return true; }
+    } catch {}
+    return false;
+  },
+  clearToken() {
+    this.accessToken = null;
+    try { localStorage.removeItem(LS_TOKEN_KEY); } catch {}
+  },
+  async testToken() {
+    try {
+      const r = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", { headers: { Authorization: `Bearer ${this.accessToken}` } });
+      return r.ok;
+    } catch { return false; }
   },
   async findFile() {
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id,name,modifiedTime)`, { headers: { Authorization: `Bearer ${this.accessToken}` } });
@@ -551,19 +577,44 @@ export default function Manuscrit() {
   const onDragEnd = useCallback(() => { setDragItem(null); setDropIndicator(null); }, []);
 
   // ── Google Drive ──
+  const loadFromDrive = useCallback(async () => {
+    const f = await driveApi.findFile();
+    if (f) { setDriveFileId(f.id); const d = await driveApi.readFile(f.id); if (Array.isArray(d) && d.length) { setProjects(d); setSyncMessage("드라이브에서 불러옴"); } }
+    else { const r = await driveApi.saveFile(projects, null); if (r.id) setDriveFileId(r.id); setSyncMessage("드라이브에 저장됨"); }
+    setTimeout(() => setSyncMessage(""), 3000);
+  }, [projects]);
+
   const connectDrive = useCallback(async () => {
     setDriveStatus("connecting");
     try {
       if (!(await driveApi.init())) { setDriveStatus("disconnected"); setSyncMessage("Google API를 불러올 수 없습니다"); return; }
-      await driveApi.requestToken(); setDriveStatus("connected");
-      const f = await driveApi.findFile();
-      if (f) { setDriveFileId(f.id); const d = await driveApi.readFile(f.id); if (Array.isArray(d) && d.length) { setProjects(d); setSyncMessage("드라이브에서 불러옴"); } }
-      else { const r = await driveApi.saveFile(projects, null); if (r.id) setDriveFileId(r.id); setSyncMessage("드라이브에 저장됨"); }
-      setTimeout(() => setSyncMessage(""), 3000);
+      await driveApi.requestToken(""); setDriveStatus("connected");
+      await loadFromDrive();
     } catch { setDriveStatus("disconnected"); setSyncMessage("연결 실패"); }
-  }, [projects]);
+  }, [loadFromDrive]);
 
-  const disconnectDrive = useCallback(() => { driveApi.accessToken = null; setDriveStatus("disconnected"); setDriveFileId(null); setSyncMessage(""); }, []);
+  const disconnectDrive = useCallback(() => { driveApi.clearToken(); setDriveStatus("disconnected"); setDriveFileId(null); setSyncMessage(""); }, []);
+
+  // Auto-reconnect on mount if saved token exists
+  useEffect(() => {
+    const tryReconnect = async () => {
+      if (driveApi.restoreToken()) {
+        setDriveStatus("connecting");
+        const valid = await driveApi.testToken();
+        if (valid) {
+          setDriveStatus("connected");
+          try {
+            const f = await driveApi.findFile();
+            if (f) { setDriveFileId(f.id); const d = await driveApi.readFile(f.id); if (Array.isArray(d) && d.length) { setProjects(d); setSyncMessage("자동 연결됨"); setTimeout(() => setSyncMessage(""), 2000); } }
+          } catch {}
+        } else {
+          driveApi.clearToken();
+          setDriveStatus("disconnected");
+        }
+      }
+    };
+    tryReconnect();
+  }, []);
 
   // ── Manual Save & Refresh ──
   const forceSave = useCallback(async () => {
@@ -734,7 +785,7 @@ export default function Manuscrit() {
       <style>{fontCSS}{`
         :root { --bg-base:#faf9f7;--surface:#fff;--surface-elevated:#fff;--surface-recessed:#f5f4f1;--border-subtle:#e8e6e1;--text-primary:#2c2a26;--text-secondary:#6b6860;--text-muted:#9e9a91;--accent:#7c6f5b;--accent-warm:#b8926a;--hover-bg:rgba(124,111,91,.07);--active-bg:rgba(124,111,91,.12);--input-bg:#f5f4f1;--editor-bg:#fffffe;--scrollbar-thumb:#d4d0c8; }
         @media(prefers-color-scheme:dark){ :root { --bg-base:#1a1916;--surface:#222019;--surface-elevated:#2a2822;--surface-recessed:#15140f;--border-subtle:#3a3830;--text-primary:#e8e4dc;--text-secondary:#a09b8f;--text-muted:#6e695e;--accent:#b8a88a;--accent-warm:#c9a77c;--hover-bg:rgba(184,168,138,.08);--active-bg:rgba(184,168,138,.14);--input-bg:#2a2822;--editor-bg:#1e1d18;--scrollbar-thumb:#4a4740; } }
-        *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100%;overflow:hidden}
+        *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100%;overflow:hidden;background:var(--bg-base)}
         ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
         textarea::placeholder{color:var(--text-muted);opacity:.7}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} .animate-fade-in{animation:fadeIn .3s ease-out}
@@ -837,7 +888,7 @@ export default function Manuscrit() {
               </div>
             )}
             {activeDoc ? (
-              <div className="max-w-3xl mx-auto px-6 py-8 md:px-12 md:py-12 animate-fade-in">
+              <div className="max-w-3xl mx-auto px-4 py-4 md:px-6 md:py-5 animate-fade-in">
                 <textarea ref={editorRef} value={activeDoc.content} onChange={handleEditorChange} placeholder="여기에 글을 쓰세요..."
                   className="w-full resize-none outline-none" style={{
                     background: "transparent", color: "var(--text-primary)", fontFamily: "'Nanum Gothic', sans-serif",
@@ -854,7 +905,7 @@ export default function Manuscrit() {
             )}
           </div>
 
-          <div className="flex items-center justify-between px-5 py-2 flex-shrink-0" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 32 }}>
+          <div className="flex items-center justify-between px-5 flex-shrink-0" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 32, paddingTop: "0.5rem", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
             <div className="flex items-center gap-3">
               {driveStatus === "connected" ? <Cloud size={11} style={{ color: "#4ade80" }} /> : <CloudOff size={11} style={{ color: "var(--text-muted)", opacity: 0.4 }} />}
               <button onClick={openExportModal} className="flex items-center gap-1 px-2 py-0.5 rounded" style={{ color: "var(--text-muted)", fontSize: "0.6rem", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, transition: "color 150ms" }}
