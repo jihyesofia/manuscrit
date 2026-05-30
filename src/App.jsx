@@ -367,36 +367,6 @@ export default function Manuscrit() {
     touchStartY.current = 0;
   }, [pullDistance, driveStatus]);
 
-  // ── Smart Typography ──
-  const handleEditorChange = useCallback((e) => {
-    const ta = e.target;
-    let val = ta.value;
-    let cur = ta.selectionStart;
-
-    // ... → …
-    if (cur >= 3 && val.slice(cur - 3, cur) === "...") {
-      val = val.slice(0, cur - 3) + "\u2026" + val.slice(cur);
-      cur -= 2;
-    }
-
-    // Smart double quotes: " → " or "
-    if (cur >= 1 && val[cur - 1] === '"') {
-      const before = cur >= 2 ? val[cur - 2] : "";
-      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(" || before === "\u2014";
-      val = val.slice(0, cur - 1) + (isOpen ? "\u201C" : "\u201D") + val.slice(cur);
-    }
-
-    // Smart single quotes: ' → ' or '
-    if (cur >= 1 && val[cur - 1] === "'") {
-      const before = cur >= 2 ? val[cur - 2] : "";
-      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(";
-      val = val.slice(0, cur - 1) + (isOpen ? "\u2018" : "\u2019") + val.slice(cur);
-    }
-
-    updateDoc(activeDocId, "content", val);
-    requestAnimationFrame(() => { if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; } });
-  }, [activeDocId, updateDoc]);
-
   const FONT_SIZES = [0.8, 0.85, 0.9, 0.95, 1.0, 1.1, 1.2];
   const LINE_HEIGHTS = [1.5, 1.7, 1.85, 2.05, 2.2, 2.4];
 
@@ -446,6 +416,36 @@ export default function Manuscrit() {
   const updateDoc = useCallback((id, field, val) => {
     setProjects(p => p.map(pr => ({ ...pr, children: pr.children.map(c => c.id === id ? { ...c, [field]: val } : c) })));
   }, []);
+
+  // ── Smart Typography ──
+  const handleEditorChange = useCallback((e) => {
+    const ta = e.target;
+    let val = ta.value;
+    let cur = ta.selectionStart;
+
+    // ... → …
+    if (cur >= 3 && val.slice(cur - 3, cur) === "...") {
+      val = val.slice(0, cur - 3) + "\u2026" + val.slice(cur);
+      cur -= 2;
+    }
+
+    // Smart double quotes: " → " or "
+    if (cur >= 1 && val[cur - 1] === '"') {
+      const before = cur >= 2 ? val[cur - 2] : "";
+      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(" || before === "\u2014";
+      val = val.slice(0, cur - 1) + (isOpen ? "\u201C" : "\u201D") + val.slice(cur);
+    }
+
+    // Smart single quotes: ' → ' or '
+    if (cur >= 1 && val[cur - 1] === "'") {
+      const before = cur >= 2 ? val[cur - 2] : "";
+      const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(";
+      val = val.slice(0, cur - 1) + (isOpen ? "\u2018" : "\u2019") + val.slice(cur);
+    }
+
+    updateDoc(activeDocId, "content", val);
+    requestAnimationFrame(() => { if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; } });
+  }, [activeDocId, updateDoc]);
 
   const toggleProject = useCallback((id) => setProjects(p => p.map(pr => pr.id === id ? { ...pr, expanded: !pr.expanded } : pr)), []);
 
