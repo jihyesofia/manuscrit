@@ -312,16 +312,7 @@ export default function Manuscrit() {
   const charWithSpaces = activeDoc?.content?.length || 0;
   const charNoSpaces = useMemo(() => activeDoc?.content ? activeDoc.content.replace(/\s/g, "").length : 0, [activeDoc?.content]);
 
-  // ── Auto-resize textarea (scroll-safe) ──
-  useEffect(() => {
-    const ta = editorRef.current;
-    const scrollEl = editorScrollRef.current;
-    if (!ta) return;
-    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
-    ta.style.height = "0px";
-    ta.style.height = Math.max(300, ta.scrollHeight) + "px";
-    if (scrollEl) scrollEl.scrollTop = scrollTop;
-  }, [activeDoc?.content, editorStyle.fontSize, editorStyle.lineHeight]);
+  // (auto-resize removed — textarea fills container and scrolls naturally)
 
   // ── LocalStorage (offline fallback) ──
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(projects)); } catch {} }, [projects]);
@@ -351,16 +342,11 @@ export default function Manuscrit() {
   // ── Smart Typography ──
   const handleEditorChange = useCallback((e) => {
     const ta = e.target; let val = ta.value; let cur = ta.selectionStart;
-    const scrollEl = editorScrollRef.current;
-    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
     if (cur >= 3 && val.slice(cur - 3, cur) === "...") { val = val.slice(0, cur - 3) + "\u2026" + val.slice(cur); cur -= 2; }
     if (cur >= 1 && val[cur - 1] === '"') { const before = cur >= 2 ? val[cur - 2] : ""; const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(" || before === "\u2014"; val = val.slice(0, cur - 1) + (isOpen ? "\u201C" : "\u201D") + val.slice(cur); }
     if (cur >= 1 && val[cur - 1] === "'") { const before = cur >= 2 ? val[cur - 2] : ""; const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "("; val = val.slice(0, cur - 1) + (isOpen ? "\u2018" : "\u2019") + val.slice(cur); }
     updateDoc(activeDocId, "content", val);
-    requestAnimationFrame(() => {
-      if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; }
-      if (scrollEl) scrollEl.scrollTop = scrollTop;
-    });
+    requestAnimationFrame(() => { if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; } });
   }, [activeDocId, updateDoc]);
 
   const toggleProject = useCallback((id) => setProjects(p => p.map(pr => pr.id === id ? { ...pr, expanded: !pr.expanded } : pr)), []);
@@ -603,24 +589,24 @@ export default function Manuscrit() {
             </div>
           )}
 
-          <div ref={editorScrollRef} className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
-            {activeDoc ? (
-              <div className="max-w-3xl mx-auto px-4 py-4 md:px-6 md:py-5 animate-fade-in" style={{ minHeight: "100%" }}>
+          {activeDoc ? (
+            <div ref={editorScrollRef} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 max-w-3xl w-full mx-auto px-4 md:px-6 overflow-hidden">
                 <textarea ref={editorRef} value={activeDoc.content} onChange={handleEditorChange} placeholder="여기에 글을 쓰세요..."
-                  className="w-full resize-none outline-none" style={{
+                  className="w-full h-full resize-none outline-none" style={{
                     background: "transparent", color: "var(--text-primary)", fontFamily: "'Nanum Gothic', sans-serif",
                     fontSize: `${editorStyle.fontSize}rem`, lineHeight: editorStyle.lineHeight, letterSpacing: "-0.01em",
                     fontWeight: editorStyle.bold ? 700 : 400, fontStyle: editorStyle.italic ? "italic" : "normal",
-                    textDecoration: editorStyle.underline ? "underline" : "none", overflow: "hidden", minHeight: 300
+                    textDecoration: editorStyle.underline ? "underline" : "none", paddingTop: "1rem", paddingBottom: "2rem"
                   }} />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-4 px-8">
-                <div style={{ color: "var(--text-muted)", opacity: 0.4 }}><BookOpen size={48} strokeWidth={1} /></div>
-                <p className="text-center text-sm" style={{ color: "var(--text-muted)", maxWidth: 280, lineHeight: 1.7 }}>왼쪽 프로젝트에서<br />문서를 선택하세요</p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
+              <div style={{ color: "var(--text-muted)", opacity: 0.4 }}><BookOpen size={48} strokeWidth={1} /></div>
+              <p className="text-center text-sm" style={{ color: "var(--text-muted)", maxWidth: 280, lineHeight: 1.7 }}>왼쪽 프로젝트에서<br />문서를 선택하세요</p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between px-5 flex-shrink-0" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", minHeight: 32, paddingTop: "0.5rem", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
             <div className="flex items-center gap-3">
