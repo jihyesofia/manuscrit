@@ -312,10 +312,15 @@ export default function Manuscrit() {
   const charWithSpaces = activeDoc?.content?.length || 0;
   const charNoSpaces = useMemo(() => activeDoc?.content ? activeDoc.content.replace(/\s/g, "").length : 0, [activeDoc?.content]);
 
-  // ── Auto-resize textarea ──
+  // ── Auto-resize textarea (scroll-safe) ──
   useEffect(() => {
-    const ta = editorRef.current; if (!ta) return;
-    ta.style.height = "auto"; ta.style.height = Math.max(300, ta.scrollHeight) + "px";
+    const ta = editorRef.current;
+    const scrollEl = editorScrollRef.current;
+    if (!ta) return;
+    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    ta.style.height = "0px";
+    ta.style.height = Math.max(300, ta.scrollHeight) + "px";
+    if (scrollEl) scrollEl.scrollTop = scrollTop;
   }, [activeDoc?.content, editorStyle.fontSize, editorStyle.lineHeight]);
 
   // ── LocalStorage (offline fallback) ──
@@ -346,11 +351,16 @@ export default function Manuscrit() {
   // ── Smart Typography ──
   const handleEditorChange = useCallback((e) => {
     const ta = e.target; let val = ta.value; let cur = ta.selectionStart;
+    const scrollEl = editorScrollRef.current;
+    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
     if (cur >= 3 && val.slice(cur - 3, cur) === "...") { val = val.slice(0, cur - 3) + "\u2026" + val.slice(cur); cur -= 2; }
     if (cur >= 1 && val[cur - 1] === '"') { const before = cur >= 2 ? val[cur - 2] : ""; const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "(" || before === "\u2014"; val = val.slice(0, cur - 1) + (isOpen ? "\u201C" : "\u201D") + val.slice(cur); }
     if (cur >= 1 && val[cur - 1] === "'") { const before = cur >= 2 ? val[cur - 2] : ""; const isOpen = !before || before === " " || before === "\n" || before === "\t" || before === "("; val = val.slice(0, cur - 1) + (isOpen ? "\u2018" : "\u2019") + val.slice(cur); }
     updateDoc(activeDocId, "content", val);
-    requestAnimationFrame(() => { if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; } });
+    requestAnimationFrame(() => {
+      if (editorRef.current) { editorRef.current.selectionStart = cur; editorRef.current.selectionEnd = cur; }
+      if (scrollEl) scrollEl.scrollTop = scrollTop;
+    });
   }, [activeDocId, updateDoc]);
 
   const toggleProject = useCallback((id) => setProjects(p => p.map(pr => pr.id === id ? { ...pr, expanded: !pr.expanded } : pr)), []);
@@ -529,7 +539,7 @@ export default function Manuscrit() {
       <style>{fontCSS}{`
         :root { --bg-base:#faf9f7;--surface:#fff;--surface-elevated:#fff;--surface-recessed:#f5f4f1;--border-subtle:#e8e6e1;--text-primary:#2c2a26;--text-secondary:#6b6860;--text-muted:#9e9a91;--accent:#7c6f5b;--accent-warm:#b8926a;--hover-bg:rgba(124,111,91,.07);--active-bg:rgba(124,111,91,.12);--input-bg:#f5f4f1;--editor-bg:#fffffe;--scrollbar-thumb:#d4d0c8; }
         @media(prefers-color-scheme:dark){ :root { --bg-base:#1a1916;--surface:#222019;--surface-elevated:#2a2822;--surface-recessed:#15140f;--border-subtle:#3a3830;--text-primary:#e8e4dc;--text-secondary:#a09b8f;--text-muted:#6e695e;--accent:#b8a88a;--accent-warm:#c9a77c;--hover-bg:rgba(184,168,138,.08);--active-bg:rgba(184,168,138,.14);--input-bg:#2a2822;--editor-bg:#1e1d18;--scrollbar-thumb:#4a4740; } }
-        *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100%;overflow:hidden;background:var(--bg-base)}
+        *{box-sizing:border-box;margin:0;padding:0} html,body,#root{height:100dvh;height:100vh;overflow:hidden;background:var(--bg-base)}
         ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
         textarea::placeholder{color:var(--text-muted);opacity:.7}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} .animate-fade-in{animation:fadeIn .3s ease-out}
